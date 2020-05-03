@@ -5,6 +5,7 @@ import { graphqlExpress, graphiqlExpress } from "graphql-server-express";
 import { makeExecutableSchema } from "graphql-tools";
 import cors from "cors";
 import { prepare } from "../util/index";
+import typeDefs from "./typeDefs.js";
 
 const app = express();
 
@@ -20,70 +21,75 @@ export const start = async () => {
 
     const Links = db.collection("links");
 
-    const typeDefs = [
-      `
-      type Query {
-        post(_id: String): Post
-        posts: [Post]
-        comment(_id: String): Comment
-      }
-
-      type Post {
-        _id: String
-        title: String
-        content: String
-        comments: [Comment]
-      }
-
-      type Comment {
-        _id: String
-        postId: String
-        content: String
-        post: Post
-      }
-
-      type Mutation {
-        createPost(title: String, content: String): Post
-        createComment(postId: String, content: String): Comment
-      }
-
-      schema {
-        query: Query
-        mutation: Mutation
-      }
-    `,
-    ];
-
     const resolvers = {
       Query: {
-        post: async (root, { _id }) => {
-          return prepare(await Posts.findOne(ObjectId(_id)));
+        randomLink: () => this.randomLink(),
+        searchId: (_, { id }) => {
+          const a = this.links.find((link) => link.id === id);
+          return a;
         },
-        posts: async () => {
-          return (await Posts.find({}).toArray()).map(prepare);
-        },
-        comment: async (root, { _id }) => {
-          return prepare(await Comments.findOne(ObjectId(_id)));
-        },
-      },
-      Post: {
-        comments: async ({ _id }) => {
-          return (await Comments.find({ postId: _id }).toArray()).map(prepare);
-        },
-      },
-      Comment: {
-        post: async ({ postId }) => {
-          return prepare(await Posts.findOne(ObjectId(postId)));
-        },
+        links: () => this.links,
       },
       Mutation: {
-        createPost: async (root, args, context, info) => {
-          const res = await Posts.insertOne(args);
-          return prepare(res.ops[0]); // https://mongodb.github.io/node-mongodb-native/3.1/api/Collection.html#~insertOneWriteOpResult
+        addLink: (parent, args) => {
+          const link = {
+            id: `${generateId()}`,
+            title: args.title | "",
+            takeaways: args.takeaways || "",
+            url: args.url || "",
+            categories: args.categories || [],
+            datesAccessed: args.datesAccessed || [],
+          };
+
+          // TODO: look for duplicates
+          this.links.push(link);
+          return link;
         },
-        createComment: async (root, args) => {
-          const res = await Comments.insert(args);
-          return prepare(await Comments.findOne({ _id: res.insertedIds[1] }));
+
+        updateLink: (_, params) => {
+          const updatedLink = JSON.parse(params.stringifiedLink);
+          const index = this.links.findIndex(
+            (link) => link.id == updatedLink.id
+          );
+          if (index === -1) {
+            this.links.push(updatedLink);
+          } else {
+            this.links[index] = updatedLink;
+          }
+          return updatedLink;
+        },
+
+        updateLinkFields: (_, l) => {
+          const index = this.links.findIndex((link) => link.id == l.id);
+          if (index === -1) {
+            this.links.push(l);
+          } else {
+            this.links[index] = l;
+          }
+          return l;
+        },
+        deleteLink: (_, { id }) => {
+          let deletedLink;
+
+          this.links = this.links.filter((link) => {
+            if (link.id === id) {
+              deletedLink = link;
+              return false;
+            }
+            return true;
+          });
+          return deletedLink;
+        },
+        searchAll: (_, { query }) => {
+          let results = [];
+          for (let i = 0; i < this.links.length; i++) {
+            for (key in this.links[i]) {
+              if (this.links[i][key].indexOf(query) !== -1) {
+                results.push(this.links[i]);
+              }
+            }
+          }
+          return results;
         },
       },
     };

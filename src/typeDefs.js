@@ -1,0 +1,32 @@
+export default [
+  `type Query {
+  randomLink: Link!
+  searchId(id: ID!): Link
+  links: [Link!]!
+}
+
+type Mutation {
+  updateLinkFields(
+    id: ID!
+    title: String
+    url: String
+    takeaways: String
+    keywords: [String]
+    datesAccessed: [String]
+  ): Link
+  updateLink(stringifiedLink: String): Link
+  deleteLink(id: ID!): Link
+  addLink(title: String!, url: String, takeaways: String): Link!
+  searchAll(query: String!): [Link!]!
+}
+
+type Link {
+  id: ID!
+  keywords: [String]
+  title: String!
+  takeaways: String
+  url: String
+  datesAccessed: [String]
+}
+`,
+];
